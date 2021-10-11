@@ -1,18 +1,26 @@
 package com.demo;
 
+import com.google.common.base.Supplier;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.SerializedName;
+import java.io.PrintWriter;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
+import tech.tablesaw.api.Table;
+import tech.tablesaw.plotly.Plot;
+import tech.tablesaw.plotly.api.LinePlot;
+import tech.tablesaw.plotly.components.Figure;
 
 @AllArgsConstructor
 public class Demo {
@@ -26,38 +34,48 @@ public class Demo {
     @SneakyThrows
     public static void main(String[] args) {
 
-        String response = executeGetRequest("https://countriesnow.space/api/v0.1/countries/population/cities");
+//        String response = executeGetRequest("https://countriesnow.space/api/v0.1/countries/population/cities");
+        String populationByCountries = executeGetRequest("https://countriesnow.space/api/v0.1/countries/population");
 
-        Datas datas = gson.fromJson(response, Datas.class);
+        PopulationByCountriesResponse response = gson.fromJson(populationByCountries, PopulationByCountriesResponse.class);
 
-        datas.getCities().stream()
-//            .map(City::getCountry)
-            .distinct()
-            .filter(city -> city.getCountry().startsWith("R") || city.getCountry().startsWith("r"))
-//            .sorted(Comparator.comparingInt(String::length))
-            .flatMap(city -> city.populationCounts.stream())
-            .forEach(System.out::println);
+        String path = "src/main/resources/population.csv";
+        writeCsv(response, path);
+        printTable(path);
+    }
 
+    @SneakyThrows
+    private static void printTable(String path) {
+        Table table = Table.read().csv(path);
+        Figure figure = LinePlot.create("Population", table, "year", "value", "country");
+        Plot.show(figure);
+    }
 
-        List.of(List.of(1, 2, 3), List.of(4, 5, 6), List.of(7, 8)) // 1, 2, 3, 4, 5, 6, 7, 8
-            .stream()
-//            .flatMap(integers -> integers.stream())
-            .map(integers -> integers.stream())
-            .forEach(System.out::println);
+    @SneakyThrows
+    private static void writeCsv(PopulationByCountriesResponse response, String path) {
+        String csvTable = response.getData().stream()
+            // "Arab World",ARB,1960,92197753
+            // "Arab World",ARB,1961,94724510
+            .dropWhile(country -> !country.getCountry().equalsIgnoreCase("Euro area"))
+            .takeWhile(country -> !country.getCountry().equalsIgnoreCase("European Union"))
+            .map(country -> country.getPopulationCounts().stream()
+                .map(population -> createRow(country, population))
+                .reduce("", (row1, row2) -> String.join("\n", row1, row2))
+            )
+            .reduce((csv1, csv2) -> csv1 + csv2)
+            .orElseThrow(RuntimeException::new);
 
-        Boolean isMercuryInProperPhase = getMercury();
+        csvTable = "year,value,country,code" + csvTable;
 
-        String plans = isMercuryInProperPhase ? "Lucky day" : "Stay at home";
-
-        if (isMercuryInProperPhase) { // Possible NPE!
-            //...
+        try (PrintWriter writer = new PrintWriter(path)) {
+            writer.write(csvTable);
         }
     }
 
-
-    private static Boolean getMercury() {
-        return new Random().nextBoolean();
+    private static String createRow(Country country, Population population) {
+        return String.join(",", population.getYear(), population.getValue(), '"' + country.getCountry() + '"', country.getCode());
     }
+
 
     @SneakyThrows
     private static String executeGetRequest(String uri) {
@@ -68,6 +86,20 @@ public class Demo {
 
         return client.send(request, BodyHandlers.ofString()).body();
     }
+
+    @Data
+    static class PopulationByCountriesResponse {
+        private List<Country> data;
+    }
+
+    @Data
+    static class Country {
+        private String country;
+        private String code;
+        private List<Population> populationCounts;
+    }
+
+
 
     @Data
     static class Datas {
