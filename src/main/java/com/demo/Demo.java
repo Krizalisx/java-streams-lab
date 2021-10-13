@@ -1,18 +1,26 @@
 package com.demo;
 
+import static java.lang.Integer.parseInt;
+
 import com.google.common.base.Supplier;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.SerializedName;
+import it.unimi.dsi.fastutil.floats.FloatHeapSemiIndirectPriorityQueue;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse.BodyHandlers;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -54,16 +62,31 @@ public class Demo {
     @SneakyThrows
     private static void writeCsv(PopulationByCountriesResponse response, String path) {
         String csvTable = response.getData().stream()
-            // "Arab World",ARB,1960,92197753
-            // "Arab World",ARB,1961,94724510
-            .dropWhile(country -> !country.getCountry().equalsIgnoreCase("Euro area"))
-            .takeWhile(country -> !country.getCountry().equalsIgnoreCase("European Union"))
+            .dropWhile(country -> !country.getCountry().equalsIgnoreCase("Afghanistan"))
+            .filter(country -> {
+                    Map<Integer, Integer> populationYearValue = country.getPopulationCounts().stream()
+                        .collect(Collectors.toMap(
+                            population -> parseInt(population.getYear()),
+                            population -> parseInt(population.getValue())
+                        ));
+
+                    int maxYear = populationYearValue.keySet().stream()
+                        .mapToInt(val -> val)
+                        .max()
+                        .getAsInt();
+
+                    return populationYearValue.get(maxYear) - populationYearValue.get(maxYear - 5) < 0;
+                }
+//                .anyMatch(population -> Integer.parseInt(population.getYear()) == 2018 && Integer.parseInt(population.getValue()) < 6_000_000)
+            )
             .map(country -> country.getPopulationCounts().stream()
                 .map(population -> createRow(country, population))
                 .reduce("", (row1, row2) -> String.join("\n", row1, row2))
             )
             .reduce((csv1, csv2) -> csv1 + csv2)
             .orElseThrow(RuntimeException::new);
+
+        System.out.println(csvTable);
 
         csvTable = "year,value,country,code" + csvTable;
 
