@@ -3,14 +3,13 @@ package com.demo;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -41,10 +40,11 @@ public class InfiniteStreams {
         final int minLetters = 4;
         final int maxLetters = 10;
 
-        Random generalRandom = new Random(43); // side effects!
+        Random generalRandom = new Random(); // side effects!
         Stream.generate(() -> generalRandom)
             .map(random -> random.nextInt(maxLetters))
 //            .parallel()
+//            .sequential()
             .filter(i -> i >= minLetters)
             .map(wordLength -> Stream.generate(() -> generalRandom)
                     .map(random -> random.nextInt(lettersList.size()))
@@ -54,11 +54,43 @@ public class InfiniteStreams {
                     .collect(Collectors.joining())
             )
 //            .sorted()
-            .distinct()
+            .sequential()
+//            .parallel() // Investigate problems with forEachOrdered
+            .unordered()
+//            .distinct()
             .filter(word -> words.contains(word))
-            .limit(10)
+            .filter(distinctByKey(word -> word.length()))
+            .limit(6)
 //            .peek(System.out::println)
-            .forEachOrdered(System.out::println);
+            .forEach(System.out::println);
+
+        IntStream.iterate(0, i -> ++i)
+            .limit(10)
+//            .sorted()
+            .parallel()
+            .unordered()
+            .map(x -> x * 2)
+            .forEach(System.out::println);
 
     }
+
+
+    public static Predicate<String> distinctByKey(Function<String, Integer> keyMapper) {
+        HashSet<Integer> integers = new HashSet<>();
+        return elem -> integers.add(keyMapper.apply(elem));
+    }
+
+//        Predicate<String> result = new Predicate<String>() {
+////            HashSet<Integer> integers = new HashSet<>();
+//            Set<Integer> integers = ConcurrentHashMap.newKeySet();
+//
+//            @Override
+//            public boolean test(String word) {
+//                Integer length = keyMapper.apply(word);
+//
+//                return integers.add(length);
+//            };
+//        };
+//        return result;
+
 }
