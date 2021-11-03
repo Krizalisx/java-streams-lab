@@ -1,16 +1,37 @@
 package com.demo;
 
+import static java.util.Objects.isNull;
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toList;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.BinaryOperator;
 import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collector;
+import java.util.stream.Collector.Characteristics;
 import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 
 public class TerminalOperations {
 
@@ -59,10 +80,50 @@ public class TerminalOperations {
                 () -> new TreeMap<>(Comparator.<Integer>reverseOrder()
             )));
 
+        var collect6 = getStudents().stream()
+            .collect(Collectors.toMap(
+                Function.identity(),
+                student -> student.getSubject()
+            ))
+            .entrySet()
+            .stream()
+            .flatMap(studentListEntry -> studentListEntry.getValue().stream().map(
+                subject -> Map.entry(studentListEntry.getKey(), subject)
+            ))
+            .collect(Collectors.groupingBy(
+                studentSubjectEntry -> studentSubjectEntry.getValue().getSubjectName(),
+                Collectors.groupingBy(studentSubjectEntry -> studentSubjectEntry.getValue().getMark(), Collectors.counting()
+            )));
 
+        var collect7 = getStudents().stream()
+            .collect(Collector.of(
+                () -> new HashMap<String, Long>(),
+                (map, student) -> {
+                    String marks = student.getSubject().stream().map(subject -> subject.getMark()).sorted().collect(Collectors.joining());
+//                    Long studentsCount = map.get(marks);
+//                    if (isNull(studentsCount)) {
+//                        studentsCount = 1L;
+//                    } else {
+//                        ++studentsCount;
+//                    }
+//                    map.put(marks, studentsCount);
+                    map.merge(marks, 1L, ((aLong, aLong2) -> aLong + aLong2));
+                },
+                (map1, map2) -> {
+                    map1.putAll(map2);
+                    return map1;
+                }
+            ));
 
-        System.out.println(gson.toJson(collect4));
-        System.out.println(collect5.getClass());
+        var theSameAsCustom = getStudents().stream()
+            .collect(Collectors.groupingBy(student -> student.getSubject().stream().map(subject -> subject.getMark()).sorted().collect(Collectors.joining()),
+//                Collectors.collectingAndThen(Collectors.toList(), students -> students.size())
+                Collectors.counting()
+                ));
+
+        System.out.println(gson.toJson(collect7));
+        System.out.println(gson.toJson(theSameAsCustom));
+        // {"AAA": 2, "ABF": 4, "FFA": 1, "FFF": 3}
 
 
     }
@@ -75,7 +136,8 @@ public class TerminalOperations {
             new Student("James", "Brown", 28, List.of(subject("Math", "F"), subject("History", "C"), subject("Music", "B"))),
             new Student("Lucas", "Jones", 22, List.of(subject("Math", "A"), subject("History", "F"), subject("Music", "B"))),
             new Student("Mason", "Garcia", 18, List.of(subject("Math", "C"), subject("History", "F"), subject("Music", "C"))),
-            new Student("Ethan", "Miller", 29, List.of(subject("Math", "F"), subject("History", "F"), subject("Music", "A")))
+            new Student("Ethan", "Miller", 29, List.of(subject("Math", "F"), subject("History", "A"), subject("Music", "F"))),
+            new Student("Bob", "Dilan", 29, List.of(subject("Math", "F"), subject("History", "F"), subject("Music", "A")))
         );
     }
 
